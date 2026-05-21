@@ -388,5 +388,4 @@ if __name__ == "__main__":
     print(f"OCR support:        {'YES (pdf2image + pytesseract)' if HAS_OCR else 'NO  — install: pip install pdf2image pytesseract'}")
     print(f"PDF text extract:   {'YES (pdfplumber)' if HAS_PDFPLUMBER else 'NO  — install: pip install pdfplumber'}")
     print("="*50 + "\n")
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app.run(host="0.0.0.0", port=5000, debug=False)
