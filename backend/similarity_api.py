@@ -322,7 +322,65 @@ def similarity():
         })
 
     return jsonify({"results": results})
+# ── Root route ────────────────────────────────────────────
+@app.route('/', methods=['GET'])
+def home():
+    return jsonify({
+        "status": "ok",
+        "message": "DocScan BERT API is running!",
+        "routes": ["/health", "/similarity", "/compare-group", "/extract-pdf"]
+    })
 
+# ── compare-group (called by Supabase edge function) ──────
+@app.route('/compare-group', methods=['POST'])
+def compare_group():
+    data = request.json
+    docs = data.get('docs', [])
+    sentence_threshold = float(data.get('sentence_threshold', 0.75))
+
+    if len(docs) < 2:
+        return jsonify({"error": "Need at least 2 documents"}), 400
+
+    valid_docs = [d for d in docs if is_readable(d.get('text', ''))]
+    if len(valid_docs) < 2:
+        return jsonify({"results": []})
+
+    results = []
+    for doc in valid_docs:
+        others = [d for d in valid_docs if d['id'] != doc['id']]
+        max_sim = 0.0
+        most_similar_id = None
+        all_matches = {}
+
+        for other in others:
+            sim = doc_similarity(doc['text'], other['text'])
+            if sim > max_sim:
+                max_sim = sim
+                most_similar_id = other['id']
+            regno = other.get('register_number') or other.get('id', 'Unknown')
+            matches = get_sentence_matches(
+                doc['text'], other['text'], regno, sentence_threshold
+            )
+            for m in matches:
+                key = m['sentence'][:80].lower().strip()
+                if key not in all_matches or all_matches[key]['similarity'] < m['similarity']:
+                    all_matches[key] = m
+
+        score = min(100, round(max_sim * 100))
+        sentence_matches = sorted(
+            all_matches.values(), key=lambda x: -x['similarity']
+        )[:50]
+
+        results.append({
+            "id": doc['id'],
+            "register_number": doc.get('register_number', 'Unknown'),
+            "submitted_at": doc.get('submitted_at', ''),
+            "score": score,
+            "most_similar_id": most_similar_id,
+            "sentence_matches": sentence_matches,
+        })
+
+    return jsonify({"results": results})
 # ── Start ─────────────────────────────────────────────────
 if __name__ == "__main__":
     print("\n" + "="*50)
@@ -330,4 +388,5 @@ if __name__ == "__main__":
     print(f"OCR support:        {'YES (pdf2image + pytesseract)' if HAS_OCR else 'NO  — install: pip install pdf2image pytesseract'}")
     print(f"PDF text extract:   {'YES (pdfplumber)' if HAS_PDFPLUMBER else 'NO  — install: pip install pdfplumber'}")
     print("="*50 + "\n")
-    app.run(host="0.0.0.0", port=5000, debug=False)
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port, debug=False)
