@@ -1,0 +1,2 @@
+[tool.vercel]
+entrypoint = "similarity_api:app"
